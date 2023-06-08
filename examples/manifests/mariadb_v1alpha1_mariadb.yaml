@@ -28,17 +28,13 @@ spec:
       - ReadWriteOnce
 
   volumes: 
-    - name: tmp
-      emptyDir: {}
     - name: mariadb-persistent-storage
       persistentVolumeClaim:
         claimName: mariadb-pv-claim
 
   volumeMounts: 
-    - name: tmp
-      mountPath: /tmp
     - name: mariadb-persistent-storage
-      mountPath: /var/lib/mysql
+      mountPath: /
 
   myCnf: |
     [mysqld]
