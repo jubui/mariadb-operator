@@ -24,15 +24,21 @@ spec:
     resources:
       requests:
         storage: 100Mi
-    storageClassName: standard
     accessModes:
       - ReadWriteOnce
+
   volumes: 
     - name: tmp
       emptyDir: {}
+    - name: mariadb-persistent-storage
+      persistentVolumeClaim:
+        claimName: mariadb-pv-claim
+
   volumeMounts: 
     - name: tmp
       mountPath: /tmp
+    - name: mariadb-persistent-storage
+      mountPath: /var/lib/mysql
 
   myCnf: |
     [mysqld]
@@ -59,7 +65,7 @@ spec:
         name: mariadb
 
   podSecurityContext:
-    runAsUser: 0
+    runAsUser: 500
 
   securityContext:
     allowPrivilegeEscalation: false
@@ -88,3 +94,40 @@ spec:
     type: LoadBalancer
     annotations:
       metallb.universe.tf/loadBalancerIPs: 172.18.0.20
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mariadb-pv-claim
+  labels:
+    app: mariadb
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: "julian-service-account"
+  annotations:
+    # cluster name formatting should match this:
+    # https://gitlab.appian-stratus.com/appian/prod/clusters/-/blob/2b1616e193193338124fe5cb6414c15cf2f0778c/infrastructure/clusters/modules/sites_cluster_resources/sites_iam.tf#L372
+    eks.amazonaws.com/role-arn: arn:aws:iam::{{ .Values.cluster.accountId }}:role/TokenVendingMachineTest_{{ .Values.cluster.name | replace "-" "" }}
+automountServiceAccountToken: true
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  labels:
+    app.kubernetes.io/instance: tvm-gitlab-runner-permissions
+  name: service-runner-permissions:tvm-r:gitlab-runner:privleged-psp
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: eks:podsecuritypolicy:privileged
+subjects:
+- kind: ServiceAccount
+  name: "julian-service-account"
